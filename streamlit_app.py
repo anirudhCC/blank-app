@@ -1,4 +1,4 @@
-!pip install openpyxl fpdf pandas
+pip install openpyxl fpdf pandas
 import streamlit as st
 from openpyxl import load_workbook
 from openpyxl.utils.cell import get_column_letter
