@@ -35,16 +35,19 @@ def get_table_styles(sheet):
         styles[cell.column_letter] = {'font': font_name, 'bold': cell.font.bold}
     return styles
 
-def calculate_column_widths(headers, data, pdf, max_width=500,fixed_width=35):
+def calculate_column_widths(headers, data, pdf, max_width=500, fixed_width=30):
     col_widths = []
-    for j in range(len(headers)):
-        pdf.set_font('Arial', 'B', 9)
-        header_width = pdf.get_string_width(str(headers[j]) or "") + 4
-        pdf.set_font('Arial', '', 8)
-        max_data_width = max((pdf.get_string_width(str(row[j]) or "") + 4 for _, row in data.iterrows()), default=header_width)
-        col_widths.append(min(max_data_width, 25))
+    for j, header in enumerate(headers):  #CHANGED: Added header to check for "Details"
+        pdf.set_font('Arial', 'B', 8)
+        width = pdf.get_string_width(str(header) or "") + 6  # CHANGED: Adjusted padding to 6
+        if header == "Details":  # CHANGED: Increase width for "Details" column
+            width = max(width, 50)  # CHANGED: Minimum width of 60 for "Details"
+        else:
+            width = min(width, 30)  # CHANGED: Cap other columns at 30
+        col_widths.append(width)
     total_width = sum(col_widths)
-    if total_width > max_width: col_widths = [w * (max_width / total_width) for w in col_widths]
+    if total_width > max_width:
+        col_widths = [w * (max_width / total_width) for w in col_widths]
     return col_widths
 
 def save_as_pdf(sheet, page_ranges, output_folder):
@@ -57,11 +60,22 @@ def save_as_pdf(sheet, page_ranges, output_folder):
 
     for idx, cell_range in page_ranges.items():
         data = pd.DataFrame([[cell.value for cell in row] for row in sheet[cell_range]])
-        brand_idx = headers.index('BrandSupplierDescription') if 'BrandSupplierDescription' in headers else None
-        ccn_idx = headers.index('CCN') if 'CCN' in headers else None
+        brand_idx = 2
+        #headers.index('BrandSupplierDescription') if 'BrandSupplierDescription' in headers else headers.index('Supplier') if 'Supplier' in headers else None       
 
-        file_name = f"{sanitize_filename(data.iloc[0, brand_idx])}_{sanitize_filename(data.iloc[0, ccn_idx])}.pdf" \
-                    if brand_idx is not None and ccn_idx is not None else f"{idx}.pdf"
+        ccn_idx = headers.index('CCN') if 'CCN' in headers else None
+        if data.empty:
+            print("Data is unexpectedly empty before file name creation.")
+            print(cell_range)
+            file_name = f"{idx}.pdf"
+        else:
+            file_name = (f"{sanitize_filename(data.iloc[0, brand_idx])}_{sanitize_filename(data.iloc[0, ccn_idx])}.pdf"
+                            if brand_idx is not None and ccn_idx is not None 
+                            else f"{idx}.pdf"
+                            )
+
+        #file_name = f"{sanitize_filename(data.iloc[0, brand_idx])}_{sanitize_filename(data.iloc[0, ccn_idx])}.pdf" \
+                    #if brand_idx is not None and ccn_idx is not None else f"{idx}.pdf"
 
         pdf_file_path = os.path.join(output_folder, file_name)
         pdf = FPDF(orientation='L')
@@ -72,40 +86,81 @@ def save_as_pdf(sheet, page_ranges, output_folder):
 
         # Headers
         start_y = pdf.get_y()
+        start_x = pdf.l_margin  # Start at the left margin
+        pdf.set_xy(start_x, start_y)
         for j, header in enumerate(headers):
-            start_x = pdf.get_x()
             col_letter = get_column_letter(j + 1)
-            pdf.set_font('Arial', 'B' if styles[col_letter]['bold'] else '', 9)
+            if header in ['Contract_Reference_Number', 'BrandSupplierDescription']:
+                pdf.set_font('Arial', 'B', 6)
+            else:
+                pdf.set_font('Arial', 'B', 8)
             pdf.set_fill_color(200, 200, 200)
             pdf.cell(col_widths[j], row_height * 2, str(header) or "", border=1, fill=True, align='C')
-            pdf.set_xy(start_x + col_widths[j], start_y)
+            start_x += col_widths[j]  # Move to the next column position
+            pdf.set_xy(start_x, start_y)
         pdf.ln(row_height * 2)
 
+
         # Data
-        for _, row in data.iterrows():
-            start_y = pdf.get_y()
+        effective_page_height = pdf.h - pdf.t_margin - pdf.b_margin  # Usable height (e.g., ~170 for landscape A4)
+        current_y = pdf.get_y()
+        for row_idx, row in data.iterrows():
+            if current_y + row_height > effective_page_height:
+                pdf.add_page()
+                current_y = pdf.get_y()
+
+            start_y = current_y
             max_height = row_height
+            start_x = pdf.l_margin  # Reset X to the left margin for each row
+            pdf.set_xy(start_x, start_y)
+            row_color = (255, 255, 255) if row_idx % 2 == 0 else (230, 230, 230)
+            pdf.set_fill_color(*row_color)
+
+
             for j, item in enumerate(row):
-                start_x = pdf.get_x()
                 col_letter = get_column_letter(j + 1)
-                pdf.set_font('Arial', '', 8)
+                if headers[j] in ['Item Name']:
+                    pdf.set_font('Arial', '', 6)
+                else:
+                    pdf.set_font('Arial', '', 7)
+                if headers[j] in ['Contract', 'Contract_Reference_Number']:
+                    if pd.isna(item) or item is None:
+                         item = ""  
+                    else:
+                        item = int(item)
 
                 if isinstance(item, (int, float)):
                     item = round(item, 2)
-
                 content = "" if pd.isna(item) or item is None else str(item)
-                if headers[j] in ['RetroRate', 'Retro_Value'] and content:
+                if headers[j] in ['RetroRate', 'Retro_Value','Retro Rate'] and content:
                     content = f"£{content}"
-                lines = content.split('\n') if '\n' in content else [content]
-                for line in lines:
-                    pdf.multi_cell(col_widths[j], row_height, line, align='C', border=1)
+                
+                lines = []
+                words = content.split(' ')
+                current_line = ""
+                for word in words:
+                    if pdf.get_string_width(current_line + word) < col_widths[j]:
+                        current_line += word + " "
+                    else:
+                        lines.append(current_line.strip())
+                        current_line = word + " "
+                lines.append(current_line.strip())
+                wrapped_content = '\n'.join(lines)
+                
+                pdf.multi_cell(col_widths[j], row_height, wrapped_content, align='C', border=0,fill=True)
                 cell_height = pdf.get_y() - start_y
                 max_height = max(max_height, cell_height)
-                pdf.set_xy(start_x + col_widths[j], start_y)
-            pdf.set_xy(pdf.l_margin, start_y + max_height)
+                start_x += col_widths[j]  # Move to the next column position
+                pdf.set_xy(start_x, start_y)  # Set position for the next cell
+
+            current_y = start_y + max_height
+            pdf.set_xy(pdf.l_margin, current_y)
+            #print(f"Row processed: start_y={start_y}, max_height={max_height}, current_page={pdf.page_no()}")
 
         pdf.output(pdf_file_path)
+        print(f"PDF {file_name} generated with {pdf.page_no()} pages")
         pdf_files.append(pdf_file_path)
+    
     return pdf_files
 
 def zip_pdfs(pdf_files, zip_filename="generated_pdfs.zip"):
