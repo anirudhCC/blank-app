@@ -131,9 +131,18 @@ def save_as_pdf(sheet, page_ranges, output_folder):
 
                 if isinstance(item, (int, float)):
                     item = round(item, 2)
-                content = "" if pd.isna(item) or item is None else str(item)
-                if headers[j] in ['RetroRate', 'Retro_Value','Retro Rate'] and content:
-                    content = f"£{content}"
+               
+                if headers[j] in ['RetroRate','Rate','Volume', 'Retro_Value', 'Retro Rate'] and item is not None and not pd.isna(item):
+                    content = f"£{item:.2f}"
+                else:
+                    content="" if pd.isna(item) or item is None else str(item)
+                
+
+                #if isinstance(item, (int, float)):
+                    #item = round(item, 2)
+                #content = "" if pd.isna(item) or item is None else str(item)
+                #if headers[j] in ['RetroRate', 'Retro_Value','Retro Rate'] and content:
+                    #content = f"£{content}"
                 
                 lines = []
                 words = content.split(' ')
