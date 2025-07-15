@@ -7,6 +7,21 @@ import os
 import zipfile
 import re
 
+def clean_text(text):
+    replacements = {
+        '’': "'",
+        '‘': "'",
+        '“': '"',
+        '”': '"',
+        '–': '-',  # en dash
+        '—': '-',  # em dash
+        '…': '...',  # ellipsis
+        '•': '-',  # bullet
+    }
+    for orig, repl in replacements.items():
+        text = text.replace(orig, repl)
+    return text
+
 def load_excel(file_path):
     return load_workbook(filename=file_path, data_only=True)
 
@@ -156,6 +171,8 @@ def save_as_pdf(sheet, page_ranges, output_folder):
                 lines.append(current_line.strip())
                 wrapped_content = '\n'.join(lines)
                 
+                wrapped_content=clean_text(wrapped_content)
+                
                 pdf.multi_cell(col_widths[j], row_height, wrapped_content, align='C', border=0,fill=True)
                 cell_height = pdf.get_y() - start_y
                 max_height = max(max_height, cell_height)
@@ -180,7 +197,7 @@ def zip_pdfs(pdf_files, zip_filename="generated_pdfs.zip"):
 
 def main():
     st.title("Excel to PDF Generator")
-    uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
+    uploaded_file = st.file_uploader("Upload your Excel file (Updated July 2025) ", type=["xlsx"])
 
     if uploaded_file is not None:
         file_path = uploaded_file.name
