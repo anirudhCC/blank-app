@@ -144,8 +144,16 @@ def save_as_pdf(sheet, page_ranges, output_folder):
                     else:
                         item = int(item)
 
+                #if isinstance(item, (int, float)):
+                   # item = round(item, 2)
+                
                 if isinstance(item, (int, float)):
-                    item = round(item, 2)
+                    # Remove .0 if it's a whole number
+                    if isinstance(item, float) and item.is_integer():
+                        item = str(int(item))
+                    else:
+                        item = round(item, 2)
+
                
                 if headers[j] in ['RetroRate','Rate', 'Retro_Value', 'Retro Value', 'Retro Rate'] and item is not None and not pd.isna(item):
                         try:
@@ -202,7 +210,7 @@ def zip_pdfs(pdf_files, zip_filename="generated_pdfs.zip"):
 
 def main():
     st.title("Excel to PDF Generator")
-    uploaded_file = st.file_uploader("Upload your Excel file (Updated July 2025) ", type=["xlsx"])
+    uploaded_file = st.file_uploader("Upload your Excel file (Updated Aug 2025) ", type=["xlsx"])
 
     if uploaded_file is not None:
         file_path = uploaded_file.name
